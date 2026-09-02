@@ -8,7 +8,12 @@ const assets = {
 const fmt = new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', maximumFractionDigits: 0 });
 const money = (value) => typeof value === 'string' ? value : fmt.format(value);
 const byId = (id) => document.getElementById(id);
-const dom = Object.fromEntries(['ticker', 'spot', 'ticker-name', 'day', 'expiry', 'chain', 'legs', 'strategy-card', 'open-trade', 'trade-message', 'positions', 'equity', 'cash', 'reserved', 'presets'].map((id) => [id, byId(id)]));
+const dom = {
+  ticker: byId('ticker'), spot: byId('spot'), tickerName: byId('ticker-name'), day: byId('day'),
+  expiry: byId('expiry'), chain: byId('chain'), legs: byId('legs'), strategyCard: byId('strategy-card'),
+  openTrade: byId('open-trade'), tradeMessage: byId('trade-message'), positions: byId('positions'),
+  equity: byId('equity'), cash: byId('cash'), reserved: byId('reserved'), presets: byId('presets'),
+};
 
 let game = createGame();
 let ticker = 'LUMA';
