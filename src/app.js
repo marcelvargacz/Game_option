@@ -64,9 +64,9 @@ function renderChain() {
   dom.chain.innerHTML = visibleStrikes.map((strike) => {
     const call = calls.get(strike), put = puts.get(strike), atm = strike === chain.strikes[centerIndex];
     return `<div class="chain-row ${atm ? 'atm' : ''}">
-      <div class="bid">${call.bid.toFixed(2)}</div><div class="ask">${call.ask.toFixed(2)}</div><div class="option-actions"><button data-leg="call-long" data-strike="${strike}">Koupit</button><button class="sell" data-leg="call-short" data-strike="${strike}">Prodat</button></div>
+      <div class="bid"><button data-leg="call-short" data-strike="${strike}" title="Prodat Call za Bid">${call.bid.toFixed(2)}</button></div><div class="ask"><button data-leg="call-long" data-strike="${strike}" title="Koupit Call za Ask">${call.ask.toFixed(2)}</button></div>
       <div class="strike">${strike}</div>
-      <div class="option-actions"><button data-leg="put-long" data-strike="${strike}">Koupit</button><button class="sell" data-leg="put-short" data-strike="${strike}">Prodat</button></div><div class="bid">${put.bid.toFixed(2)}</div><div class="ask">${put.ask.toFixed(2)}</div>
+      <div class="bid"><button data-leg="put-short" data-strike="${strike}" title="Prodat Put za Bid">${put.bid.toFixed(2)}</button></div><div class="ask"><button data-leg="put-long" data-strike="${strike}" title="Koupit Put za Ask">${put.ask.toFixed(2)}</button></div>
     </div>`;
   }).join('');
 }

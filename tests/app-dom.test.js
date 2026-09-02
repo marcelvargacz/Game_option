@@ -20,8 +20,10 @@ test('změna tickeru, expirace a počtu řádků vykreslí přehledný opční c
   const elements = setupDom();
   await import(`../src/app.js?test=${Date.now()}`);
   assert.equal((elements.chain.innerHTML.match(/chain-row/g) ?? []).length, 9);
-  assert.match(elements.chain.innerHTML, /class="bid"/);
-  assert.match(elements.chain.innerHTML, /class="ask"/);
+  assert.match(elements.chain.innerHTML, /class="bid"><button data-leg="call-short"/);
+  assert.match(elements.chain.innerHTML, /class="ask"><button data-leg="call-long"/);
+  assert.match(elements.chain.innerHTML, /class="bid"><button data-leg="put-short"/);
+  assert.match(elements.chain.innerHTML, /class="ask"><button data-leg="put-long"/);
   elements.ticker.value = 'VELI';
   elements.ticker.dispatch('change');
   assert.equal((elements.chain.innerHTML.match(/chain-row/g) ?? []).length, 9);
