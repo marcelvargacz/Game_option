@@ -15,8 +15,9 @@ test('nová hra začíná s rozpočtem 100 000 Kč a bez pozic', () => {
   assert.equal(game.day, 0);
 });
 
-test('opční kontrakt reprezentuje 100 akcií a cena roste s růstem podkladu pro call', () => {
+test('opční kontrakt reprezentuje 100 akcií, chain má 13 strike řádků a cena callu roste s podkladem', () => {
   const chain = generateChain({ ticker: 'LUMA', spot: 100, day: 0 });
+  assert.equal(chain.strikes.length, 13);
   const call = chain.calls.find((option) => option.strike === 100 && option.expiryDays === 30);
   assert.equal(call.multiplier, 100);
   const later = generateChain({ ticker: 'LUMA', spot: 115, day: 0 });

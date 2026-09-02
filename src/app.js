@@ -10,7 +10,7 @@ const money = (value) => typeof value === 'string' ? value : fmt.format(value);
 const byId = (id) => document.getElementById(id);
 const dom = {
   ticker: byId('ticker'), spot: byId('spot'), tickerName: byId('ticker-name'), day: byId('day'),
-  expiry: byId('expiry'), chain: byId('chain'), legs: byId('legs'), strategyCard: byId('strategy-card'),
+  expiry: byId('expiry'), rowCount: byId('row-count'), chain: byId('chain'), legs: byId('legs'), strategyCard: byId('strategy-card'),
   openTrade: byId('open-trade'), tradeMessage: byId('trade-message'), positions: byId('positions'),
   equity: byId('equity'), cash: byId('cash'), reserved: byId('reserved'), presets: byId('presets'),
 };
@@ -19,6 +19,7 @@ let game = createGame();
 let ticker = 'LUMA';
 let spot = assets[ticker].spot;
 let selectedExpiry = 30;
+let selectedRows = 9;
 let draft = [];
 
 Object.entries(assets).forEach(([symbol, asset]) => dom.ticker.add(new Option(`${symbol} · ${asset.name}`, symbol)));
@@ -57,12 +58,15 @@ function renderChain() {
   const chain = currentChain();
   const calls = new Map(chain.calls.filter((option) => option.expiryDays === selectedExpiry).map((option) => [option.strike, option]));
   const puts = new Map(chain.puts.filter((option) => option.expiryDays === selectedExpiry).map((option) => [option.strike, option]));
-  dom.chain.innerHTML = chain.strikes.map((strike) => {
-    const call = calls.get(strike), put = puts.get(strike), atm = strike === chain.strikes.reduce((closest, item) => Math.abs(item - spot) < Math.abs(closest - spot) ? item : closest);
+  const centerIndex = chain.strikes.reduce((best, value, index) => Math.abs(value - spot) < Math.abs(chain.strikes[best] - spot) ? index : best, 0);
+  const start = Math.max(0, Math.min(chain.strikes.length - selectedRows, centerIndex - Math.floor(selectedRows / 2)));
+  const visibleStrikes = chain.strikes.slice(start, start + selectedRows);
+  dom.chain.innerHTML = visibleStrikes.map((strike) => {
+    const call = calls.get(strike), put = puts.get(strike), atm = strike === chain.strikes[centerIndex];
     return `<div class="chain-row ${atm ? 'atm' : ''}">
-      <div class="option-side"><span class="quote">${call.bid.toFixed(2)} / ${call.ask.toFixed(2)}</span><button data-leg="call-long" data-strike="${strike}">Koupit</button><button class="sell" data-leg="call-short" data-strike="${strike}">Prodat</button></div>
+      <div class="bid">${call.bid.toFixed(2)}</div><div class="ask">${call.ask.toFixed(2)}</div><div class="option-actions"><button data-leg="call-long" data-strike="${strike}">Koupit</button><button class="sell" data-leg="call-short" data-strike="${strike}">Prodat</button></div>
       <div class="strike">${strike}</div>
-      <div class="option-side"><button data-leg="put-long" data-strike="${strike}">Koupit</button><button class="sell" data-leg="put-short" data-strike="${strike}">Prodat</button><span class="quote">${put.bid.toFixed(2)} / ${put.ask.toFixed(2)}</span></div>
+      <div class="option-actions"><button data-leg="put-long" data-strike="${strike}">Koupit</button><button class="sell" data-leg="put-short" data-strike="${strike}">Prodat</button></div><div class="bid">${put.bid.toFixed(2)}</div><div class="ask">${put.ask.toFixed(2)}</div>
     </div>`;
   }).join('');
 }
@@ -110,6 +114,7 @@ byId('next').addEventListener('click', () => moveMarket(0));
 byId('up').addEventListener('click', () => moveMarket(1));
 byId('down').addEventListener('click', () => moveMarket(-1));
 dom.expiry.addEventListener('change', () => { selectedExpiry = Number(dom.expiry.value); draft = []; render(); });
+dom.rowCount.addEventListener('change', () => { selectedRows = Number(dom.rowCount.value); render(); });
 dom.ticker.addEventListener('change', () => { ticker = dom.ticker.value; spot = assets[ticker].spot; draft = []; render(); });
 dom.openTrade.addEventListener('click', () => { const result = openTrade(game, draft, spot); dom.tradeMessage.textContent = result.ok ? `Pozice #${result.position.id} otevřena pouze v simulaci.` : result.error; if (result.ok) draft = []; render(); });
 dom.positions.addEventListener('click', (event) => { const button = event.target.closest('[data-close]'); if (!button) return; const result = closePosition(game, Number(button.dataset.close), spot); dom.tradeMessage.textContent = result.ok ? `Pozice uzavřena. Realizované P/L: ${money(result.pnl)}.` : result.error; render(); });

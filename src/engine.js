@@ -14,7 +14,7 @@ export function quoteOption({ type, strike, spot, expiryDays, volatility = 0.32 
 }
 
 export function generateChain({ ticker, spot, day = 0, volatility = 0.32 }) {
-  const offsets = [-20, -15, -10, -5, 0, 5, 10, 15, 20];
+  const offsets = [-30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30];
   const expiryDays = [14, 30, 60];
   const strikes = offsets.map((offset) => Math.max(5, Math.round((spot + offset) / 5) * 5));
   const option = (type, strike, days) => ({
