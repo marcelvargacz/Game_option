@@ -20,6 +20,10 @@ test('změna tickeru, expirace a počtu řádků vykreslí přehledný opční c
   const elements = setupDom();
   await import(`../src/app.js?test=${Date.now()}`);
   assert.match(elements['stock-chart'].innerHTML, /Cena akcie LUMA/);
+  assert.match(elements['stock-chart'].innerHTML, /Vlastníš: 0 ks/);
+  elements['stock-chart'].dispatch('click', { closest: () => ({ dataset: { stockTrade: 'buy' }, disabled: false }) });
+  assert.match(elements.shares.textContent, /100 ks/);
+  assert.match(elements['stock-chart'].innerHTML, /Vlastníš: 100 ks/);
   assert.equal((elements.chain.innerHTML.match(/chain-row/g) ?? []).length, 9);
   assert.match(elements.chain.innerHTML, /class="bid itm"/);
   assert.match(elements.chain.innerHTML, /class="bid otm"/);

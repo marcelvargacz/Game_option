@@ -88,6 +88,20 @@ export function openTrade(game, rawLegs, spot) {
   return { ok: true, position };
 }
 
+export function tradeShares(game, { side, quantity, spot }) {
+  const shares = Number(quantity);
+  if (!Number.isInteger(shares) || shares < 1 || !['buy', 'sell'].includes(side)) return { ok: false, error: 'Neplatný akciový obchod.' };
+  const value = round(shares * spot);
+  if (side === 'buy') {
+    if (game.cash < value) return { ok: false, error: 'Nedostatek hotovosti pro nákup akcií.' };
+    game.cash = round(game.cash - value); game.shares += shares;
+    return { ok: true, cashChange: -value, sharesChange: shares };
+  }
+  if (game.shares < shares) return { ok: false, error: 'Nelze prodat více akcií, než aktuálně vlastníš.' };
+  game.cash = round(game.cash + value); game.shares -= shares;
+  return { ok: true, cashChange: value, sharesChange: -shares };
+}
+
 function payoffAtExpiry(legs, spot) {
   return legs.reduce((total, leg) => {
     const intrinsic = leg.type === 'call' ? Math.max(spot - leg.strike, 0) : Math.max(leg.strike - spot, 0);

@@ -7,6 +7,7 @@ import {
   advanceDay,
   closePosition,
   payoffProfile,
+  tradeShares,
 } from '../src/engine.js';
 
 test('nová hra začíná s rozpočtem 100 000 Kč a bez pozic', () => {
@@ -60,6 +61,15 @@ test('den expirace automaticky vypořádá ITM call fyzickým dodáním 100 akci
   assert.equal(game.shares, 100);
   assert.equal(game.cash, 89800);
   assert.equal(result.settlements[0].action, 'Uplatněna long call: nákup 100 akcií za strike 100');
+});
+
+test('držené akcie lze po přiřazení prodat zpět za aktuální cenu', () => {
+  const game = createGame();
+  game.shares = 100;
+  const result = tradeShares(game, { side: 'sell', quantity: 100, spot: 110 });
+  assert.equal(result.ok, true);
+  assert.equal(game.shares, 0);
+  assert.equal(game.cash, 111000);
 });
 
 test('OTM opce při expiraci propadne a zůstane zaznamenaná ve vypořádání', () => {

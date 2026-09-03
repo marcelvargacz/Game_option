@@ -1,4 +1,4 @@
-import { advanceDay, closePosition, createGame, gameEquity, generateChain, openTrade, payoffProfile, summarizeStrategy } from './engine.js';
+import { advanceDay, closePosition, createGame, gameEquity, generateChain, openTrade, payoffProfile, summarizeStrategy, tradeShares } from './engine.js';
 
 const assets = {
   LUMA: { name: 'Luma Robotics', spot: 100, volatility: 0.31 },
@@ -106,7 +106,7 @@ function renderPortfolio() {
   dom.cash.textContent = `Volná hotovost: ${money(game.cash)}`;
   dom.shares.textContent = `Akcie: ${game.shares} ks`;
   dom.reserved.textContent = `Zajištěno: ${money(game.reservedCash)}`;
-  const settlementLog = game.settlements.length ? `<div class="settlement-log"><b>Vypořádání expirací</b>${game.settlements.slice(-5).reverse().flatMap((record) => record.events.map((event) => `<small>Den ${record.settledDay}: ${event.action}</small>`)).join('')}</div>` : '';
+  const settlementLog = game.settlements.length ? `<div class="settlement-log"><b>Vypořádání expirací</b>${game.settlements.slice(-5).reverse().flatMap((record) => record.events.map((event) => `<small>Den ${record.settledDay}: ${event.action}<br>Hotovost: ${event.cashChange >= 0 ? '+' : '−'}${money(Math.abs(event.cashChange))} · Akcie: ${event.sharesChange >= 0 ? '+' : ''}${event.sharesChange} ks</small>`)).join('')}</div>` : '';
   if (!game.positions.length) { dom.positions.className = 'empty'; dom.positions.innerHTML = `Zatím žádná otevřená opční pozice.${settlementLog}`; return; }
   dom.positions.className = '';
   dom.positions.innerHTML = game.positions.map((position) => {
@@ -125,7 +125,7 @@ function renderStockChart() {
   const x = (index) => pad + (index * (width - pad * 2)) / Math.max(history.length - 1, 1);
   const y = (value) => height - pad - ((value - min) * (height - pad * 2)) / range;
   const line = history.map((point, index) => `${x(index).toFixed(1)},${y(point.spot).toFixed(1)}`).join(' ');
-  dom.stockChart.innerHTML = `<div><b>Cena akcie ${ticker}</b><small>Simulovaná historie · den ${history[0].day}–${history.at(-1).day}</small></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Vývoj ceny akcie ${ticker}"><polyline points="${line}"/><circle cx="${x(history.length - 1)}" cy="${y(history.at(-1).spot)}" r="3"/><text x="${pad}" y="${height - 3}">${min.toFixed(1)}</text><text x="${width - pad - 32}" y="${height - 3}">${max.toFixed(1)}</text></svg>`;
+  dom.stockChart.innerHTML = `<div><b>Cena akcie ${ticker}</b><small>Simulovaná historie · den ${history[0].day}–${history.at(-1).day}</small></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Vývoj ceny akcie ${ticker}"><polyline points="${line}"/><circle cx="${x(history.length - 1)}" cy="${y(history.at(-1).spot)}" r="3"/><text x="${pad}" y="${height - 3}">${min.toFixed(1)}</text><text x="${width - pad - 32}" y="${height - 3}">${max.toFixed(1)}</text></svg><div class="stock-actions"><button data-stock-trade="buy">Koupit 100 akcií</button><button data-stock-trade="sell" ${game.shares < 100 ? 'disabled' : ''}>Prodat 100 akcií</button><small>Vlastníš: ${game.shares} ks · hodnota ${money(game.shares * spot)}</small></div>`;
 }
 function renderHeader() { dom.spot.textContent = spot.toFixed(2); dom.tickerName.textContent = `${ticker} · ${assets[ticker].name}`; dom.day.textContent = `Den ${game.day}`; }
 function render() { renderHeader(); renderStockChart(); renderChain(); renderDraft(); renderPortfolio(); }
@@ -154,6 +154,12 @@ dom.chain.addEventListener('click', (event) => {
   const button = event.target.closest('[data-leg]'); if (!button) return;
   const [type, side] = button.dataset.leg.split('-');
   addLeg(optionFor(type, Number(button.dataset.strike)), side);
+});
+dom.stockChart.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-stock-trade]'); if (!button || button.disabled) return;
+  const result = tradeShares(game, { side: button.dataset.stockTrade, quantity: 100, spot });
+  dom.tradeMessage.textContent = result.ok ? `${result.sharesChange > 0 ? 'Nakoupeno' : 'Prodáno'} 100 akcií ${ticker} za ${money(Math.abs(result.cashChange))}.` : result.error;
+  render();
 });
 dom.legs.addEventListener('click', (event) => { const button = event.target.closest('[data-remove]'); if (button) { draft.splice(Number(button.dataset.remove), 1); render(); } });
 dom.presets.addEventListener('click', (event) => { const button = event.target.closest('[data-preset]'); if (button) makePreset(button.dataset.preset); });
