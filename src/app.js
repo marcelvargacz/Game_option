@@ -1,4 +1,4 @@
-import { advanceDay, closePosition, createGame, gameEquity, generateChain, openTrade, summarizeStrategy } from './engine.js';
+import { advanceDay, closePosition, createGame, gameEquity, generateChain, openTrade, payoffProfile, summarizeStrategy } from './engine.js';
 
 const assets = {
   LUMA: { name: 'Luma Robotics', spot: 100, volatility: 0.31 },
@@ -21,6 +21,7 @@ let spot = assets[ticker].spot;
 let selectedExpiry = 30;
 let selectedRows = 9;
 let draft = [];
+let autoTimer = null;
 
 Object.entries(assets).forEach(([symbol, asset]) => dom.ticker.add(new Option(`${symbol} · ${asset.name}`, symbol)));
 [14, 30, 60].forEach((days) => dom.expiry.add(new Option(`${days} dní`, days)));
@@ -34,6 +35,7 @@ dom.presets.innerHTML = presets.map(([id, label]) => `<button data-preset="${id}
 
 function currentChain() { return generateChain({ ticker, spot, day: game.day, volatility: assets[ticker].volatility }); }
 function optionFor(type, strike) { return currentChain()[`${type}s`].find((option) => option.strike === strike && option.expiryDays === selectedExpiry); }
+function selectionClass(type, side, strike) { return draft.some((leg) => leg.type === type && leg.side === side && leg.strike === strike) ? ` selected-${side}` : ''; }
 function setDraft(legs) { draft = legs.map((leg) => ({ ...leg, quantity: 1, expiryDays: selectedExpiry })); render(); }
 function addLeg(option, side) {
   draft.push({ type: option.type, side, strike: option.strike, premium: side === 'long' ? option.ask : option.bid, quantity: 1, expiryDays: option.expiryDays });
@@ -64,11 +66,24 @@ function renderChain() {
   dom.chain.innerHTML = visibleStrikes.map((strike) => {
     const call = calls.get(strike), put = puts.get(strike), atm = strike === chain.strikes[centerIndex];
     return `<div class="chain-row ${atm ? 'atm' : ''}">
-      <div class="bid"><button data-leg="call-short" data-strike="${strike}" title="Prodat Call za Bid">${call.bid.toFixed(2)}</button></div><div class="ask"><button data-leg="call-long" data-strike="${strike}" title="Koupit Call za Ask">${call.ask.toFixed(2)}</button></div>
+      <div class="bid"><button class="${selectionClass('call', 'short', strike)}" data-leg="call-short" data-strike="${strike}" title="Prodat Call za Bid">${call.bid.toFixed(2)}</button></div><div class="ask"><button class="${selectionClass('call', 'long', strike)}" data-leg="call-long" data-strike="${strike}" title="Koupit Call za Ask">${call.ask.toFixed(2)}</button></div>
       <div class="strike">${strike}</div>
-      <div class="bid"><button data-leg="put-short" data-strike="${strike}" title="Prodat Put za Bid">${put.bid.toFixed(2)}</button></div><div class="ask"><button data-leg="put-long" data-strike="${strike}" title="Koupit Put za Ask">${put.ask.toFixed(2)}</button></div>
+      <div class="bid"><button class="${selectionClass('put', 'short', strike)}" data-leg="put-short" data-strike="${strike}" title="Prodat Put za Bid">${put.bid.toFixed(2)}</button></div><div class="ask"><button class="${selectionClass('put', 'long', strike)}" data-leg="put-long" data-strike="${strike}" title="Koupit Put za Ask">${put.ask.toFixed(2)}</button></div>
     </div>`;
   }).join('');
+}
+function renderPayoffChart(legs, referenceSpot) {
+  const points = payoffProfile(legs, referenceSpot);
+  const width = 360, height = 130, pad = 20;
+  const values = points.map((point) => point.pnl);
+  const min = Math.min(...values, 0), max = Math.max(...values, 0);
+  const range = Math.max(max - min, 1);
+  const x = (index) => pad + (index * (width - pad * 2)) / (points.length - 1);
+  const y = (value) => height - pad - ((value - min) * (height - pad * 2)) / range;
+  const zeroY = y(0);
+  const line = points.map((point, index) => `${x(index).toFixed(1)},${y(point.pnl).toFixed(1)}`).join(' ');
+  const spotIndex = points.reduce((best, point, index) => Math.abs(point.spot - referenceSpot) < Math.abs(points[best].spot - referenceSpot) ? index : best, 0);
+  return `<figure class="payoff-chart"><figcaption>Payoff při expiraci · P/L podle ceny podkladu</figcaption><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Graf payoff strategie"><line x1="${pad}" y1="${zeroY}" x2="${width - pad}" y2="${zeroY}" class="zero-line"/><line x1="${x(spotIndex)}" y1="${pad}" x2="${x(spotIndex)}" y2="${height - pad}" class="spot-line"/><polyline points="${line}" class="payoff-line"/><text x="${pad}" y="${height - 4}">0</text><text x="${width - pad - 26}" y="${height - 4}">${points.at(-1).spot}</text></svg></figure>`;
 }
 function renderDraft() {
   if (!draft.length) { dom.legs.className = 'legs empty'; dom.legs.textContent = 'Vyber nohu z chainu nebo použij předvolbu.'; dom.strategyCard.className = 'strategy-card empty-card'; dom.strategyCard.textContent = 'Sestav strategii — hned vysvětlím, co dělá.'; dom.openTrade.disabled = true; return; }
@@ -76,7 +91,7 @@ function renderDraft() {
   dom.legs.innerHTML = draft.map((leg, index) => `<div class="leg"><span><b>${leg.side === 'long' ? 'KUPUJI' : 'PRODÁVÁM'}</b> ${leg.type.toUpperCase()} ${leg.strike} · ${leg.quantity} kontrakt (${leg.quantity * 100} akcií)</span><span>${leg.premium.toFixed(2)} <button data-remove="${index}" aria-label="Odebrat">×</button></span></div>`).join('');
   const summary = summarizeStrategy(draft, spot);
   dom.strategyCard.className = 'strategy-card';
-  dom.strategyCard.innerHTML = `<h3>${summary.name}</h3><p>${summary.description}</p><div class="metrics"><div class="metric"><span>Max. zisk</span><strong>${money(summary.maxProfit)}</strong></div><div class="metric"><span>Max. riziko</span><strong>${money(summary.maxLoss)}</strong></div><div class="metric"><span>Break-even</span><strong>${summary.breakEven.toFixed(2)}</strong></div></div><div class="scenarios"><div class="scenario"><b>↑ Trh roste:</b> ${summary.upScenario}</div><div class="scenario"><b>↓ Trh klesá:</b> ${summary.downScenario}</div></div>`;
+  dom.strategyCard.innerHTML = `<h3>${summary.name}</h3><p>${summary.description}</p><div class="metrics"><div class="metric"><span>Max. zisk</span><strong>${money(summary.maxProfit)}</strong></div><div class="metric"><span>Max. riziko</span><strong>${money(summary.maxLoss)}</strong></div><div class="metric"><span>Break-even</span><strong>${summary.breakEven.toFixed(2)}</strong></div></div><div class="scenarios"><div class="scenario"><b>↑ Trh roste:</b> ${summary.upScenario}</div><div class="scenario"><b>↓ Trh klesá:</b> ${summary.downScenario}</div></div>${renderPayoffChart(draft, spot)}`;
   dom.openTrade.disabled = false;
 }
 function renderPortfolio() {
@@ -88,7 +103,8 @@ function renderPortfolio() {
   dom.positions.innerHTML = game.positions.map((position) => {
     const summary = summarizeStrategy(position.legs, spot);
     const pnl = position.openingCashFlow + position.mark;
-    return `<article class="position"><div class="position-top"><span>${summary.name}</span><span class="${pnl >= 0 ? 'pnl-up' : 'pnl-down'}">${pnl >= 0 ? '+' : ''}${money(pnl)}</span></div><small>Aktuální hodnota: ${money(position.mark)} · otevřeno den ${position.openedDay}</small><button class="close" data-close="${position.id}">Uzavřít pozici</button></article>`;
+    const legDetails = position.legs.map((leg) => `${leg.side === 'long' ? 'Koupená' : 'Prodaná'} ${leg.type.toUpperCase()} ${leg.strike} × ${leg.quantity} @ ${leg.premium.toFixed(2)}`).join('<br>');
+    return `<article class="position"><div class="position-top"><span>${summary.name}</span><span class="${pnl >= 0 ? 'pnl-up' : 'pnl-down'}">${pnl >= 0 ? '+' : ''}${money(pnl)}</span></div><small>Aktuální hodnota: ${money(position.mark)} · otevřeno den ${position.openedDay}</small><div class="position-detail"><div><b>Provedení:</b><br>${legDetails}</div><div class="position-metrics"><span>Čisté prémium <b>${money(position.openingCashFlow)}</b></span><span>Max. zisk <b>${money(summary.maxProfit)}</b></span><span>Max. ztráta <b>${money(summary.maxLoss)}</b></span></div>${renderPayoffChart(position.legs, position.openedSpot)}</div><button class="close" data-close="${position.id}">Uzavřít pozici</button></article>`;
   }).join('');
 }
 function renderHeader() { dom.spot.textContent = spot.toFixed(2); dom.tickerName.textContent = `${ticker} · ${assets[ticker].name}`; dom.day.textContent = `Den ${game.day}`; }
@@ -100,6 +116,16 @@ function moveMarket(direction) {
   spot = Number((spot * (1 + naturalMove + direction * 0.035)).toFixed(2));
   advanceDay(game, { ticker, spot });
   render();
+}
+function toggleAutoTime() {
+  const button = byId('auto-time');
+  if (autoTimer) {
+    clearInterval(autoTimer); autoTimer = null;
+    button.textContent = '▶ Automat: vypnutý'; button.setAttribute?.('aria-pressed', 'false');
+  } else {
+    autoTimer = setInterval(() => moveMarket(0), 5000);
+    button.textContent = '■ Automat: běží · 1 den / 5 s'; button.setAttribute?.('aria-pressed', 'true');
+  }
 }
 
 dom.chain.addEventListener('click', (event) => {
@@ -113,6 +139,7 @@ byId('clear').addEventListener('click', () => { draft = []; dom.tradeMessage.tex
 byId('next').addEventListener('click', () => moveMarket(0));
 byId('up').addEventListener('click', () => moveMarket(1));
 byId('down').addEventListener('click', () => moveMarket(-1));
+byId('auto-time').addEventListener('click', toggleAutoTime);
 dom.expiry.addEventListener('change', () => { selectedExpiry = Number(dom.expiry.value); draft = []; render(); });
 dom.rowCount.addEventListener('change', () => { selectedRows = Number(dom.rowCount.value); render(); });
 dom.ticker.addEventListener('change', () => { ticker = dom.ticker.value; spot = assets[ticker].spot; draft = []; render(); });

@@ -6,6 +6,7 @@ import {
   summarizeStrategy,
   advanceDay,
   closePosition,
+  payoffProfile,
 } from '../src/engine.js';
 
 test('nová hra začíná s rozpočtem 100 000 Kč a bez pozic', () => {
@@ -32,6 +33,13 @@ test('long call uvádí správný zisk, ztrátu a scénáře', () => {
   assert.equal(summary.maxProfit, 'Neomezený');
   assert.match(summary.upScenario, /profituje/i);
   assert.match(summary.downScenario, /ztrácí/i);
+});
+
+test('payoff profil zobrazuje P/L strategie v různých cenách podkladu', () => {
+  const profile = payoffProfile([{ type: 'call', side: 'long', strike: 100, premium: 5, quantity: 1 }], 100);
+  assert.equal(profile.length, 25);
+  assert.equal(profile[0].pnl, -500);
+  assert.ok(profile.at(-1).pnl > 0);
 });
 
 test('short put s cash zajištěním blokuje přiměřenou hotovost a nejhorší ztráta je omezená', () => {

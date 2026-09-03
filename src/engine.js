@@ -93,6 +93,14 @@ function payoffAtExpiry(legs, spot) {
   }, 0);
 }
 
+export function payoffProfile(rawLegs, referenceSpot, points = 25) {
+  const legs = rawLegs.map(normalizedLeg);
+  return Array.from({ length: points }, (_, index) => {
+    const spot = round((referenceSpot * 2 * index) / (points - 1));
+    return { spot, pnl: round(payoffAtExpiry(legs, spot)) };
+  });
+}
+
 function strategyName(legs, spot) {
   if (legs.length === 1) {
     const leg = legs[0];
