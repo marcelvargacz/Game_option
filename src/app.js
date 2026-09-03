@@ -57,6 +57,10 @@ function makePreset(id) {
   };
   setDraft(recipes[id]);
 }
+function moneyness(type, strike, atmStrike) {
+  if (strike === atmStrike) return 'atm';
+  return type === 'call' ? (strike < spot ? 'itm' : 'otm') : (strike > spot ? 'itm' : 'otm');
+}
 function renderChain() {
   const chain = currentChain();
   const calls = new Map(chain.calls.filter((option) => option.expiryDays === selectedExpiry).map((option) => [option.strike, option]));
@@ -66,10 +70,12 @@ function renderChain() {
   const visibleStrikes = chain.strikes.slice(start, start + selectedRows);
   dom.chain.innerHTML = visibleStrikes.map((strike) => {
     const call = calls.get(strike), put = puts.get(strike), atm = strike === chain.strikes[centerIndex];
+    const callStatus = moneyness('call', strike, chain.strikes[centerIndex]);
+    const putStatus = moneyness('put', strike, chain.strikes[centerIndex]);
     return `<div class="chain-row ${atm ? 'atm' : ''}">
-      <div class="bid"><button class="${selectionClass('call', 'short', strike)}" data-leg="call-short" data-strike="${strike}" title="Prodat Call za Bid">${call.bid.toFixed(2)}</button></div><div class="ask"><button class="${selectionClass('call', 'long', strike)}" data-leg="call-long" data-strike="${strike}" title="Koupit Call za Ask">${call.ask.toFixed(2)}</button></div>
+      <div class="bid ${callStatus}"><button class="${selectionClass('call', 'short', strike)}" data-leg="call-short" data-strike="${strike}" title="Prodat Call za Bid">${call.bid.toFixed(2)}</button></div><div class="ask ${callStatus}"><button class="${selectionClass('call', 'long', strike)}" data-leg="call-long" data-strike="${strike}" title="Koupit Call za Ask">${call.ask.toFixed(2)}</button></div>
       <div class="strike">${strike}</div>
-      <div class="bid"><button class="${selectionClass('put', 'short', strike)}" data-leg="put-short" data-strike="${strike}" title="Prodat Put za Bid">${put.bid.toFixed(2)}</button></div><div class="ask"><button class="${selectionClass('put', 'long', strike)}" data-leg="put-long" data-strike="${strike}" title="Koupit Put za Ask">${put.ask.toFixed(2)}</button></div>
+      <div class="bid ${putStatus}"><button class="${selectionClass('put', 'short', strike)}" data-leg="put-short" data-strike="${strike}" title="Prodat Put za Bid">${put.bid.toFixed(2)}</button></div><div class="ask ${putStatus}"><button class="${selectionClass('put', 'long', strike)}" data-leg="put-long" data-strike="${strike}" title="Koupit Put za Ask">${put.ask.toFixed(2)}</button></div>
     </div>`;
   }).join('');
 }

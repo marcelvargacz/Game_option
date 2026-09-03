@@ -21,10 +21,14 @@ test('změna tickeru, expirace a počtu řádků vykreslí přehledný opční c
   await import(`../src/app.js?test=${Date.now()}`);
   assert.match(elements['stock-chart'].innerHTML, /Cena akcie LUMA/);
   assert.equal((elements.chain.innerHTML.match(/chain-row/g) ?? []).length, 9);
-  assert.match(elements.chain.innerHTML, /class="bid"><button[^>]*data-leg="call-short"/);
-  assert.match(elements.chain.innerHTML, /class="ask"><button[^>]*data-leg="call-long"/);
-  assert.match(elements.chain.innerHTML, /class="bid"><button[^>]*data-leg="put-short"/);
-  assert.match(elements.chain.innerHTML, /class="ask"><button[^>]*data-leg="put-long"/);
+  assert.match(elements.chain.innerHTML, /class="bid itm"/);
+  assert.match(elements.chain.innerHTML, /class="bid otm"/);
+  assert.match(elements.chain.innerHTML, /class="bid atm"/);
+  assert.match(elements.chain.innerHTML, /class="ask atm"/);
+  assert.match(elements.chain.innerHTML, /class="bid[^\"]*"><button[^>]*data-leg="call-short"/);
+  assert.match(elements.chain.innerHTML, /class="ask[^\"]*"><button[^>]*data-leg="call-long"/);
+  assert.match(elements.chain.innerHTML, /class="bid[^\"]*"><button[^>]*data-leg="put-short"/);
+  assert.match(elements.chain.innerHTML, /class="ask[^\"]*"><button[^>]*data-leg="put-long"/);
   elements.chain.dispatch('click', { closest: () => ({ dataset: { leg: 'call-long', strike: '100' } }) });
   assert.match(elements.chain.innerHTML, /selected-long/);
   elements.legs.dispatch('click', { closest: () => ({ dataset: { remove: '0' } }) });
