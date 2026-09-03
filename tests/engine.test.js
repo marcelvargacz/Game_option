@@ -52,6 +52,25 @@ test('short put s cash zajištěním blokuje přiměřenou hotovost a nejhorší
   assert.equal(summary.maxLoss, 9600);
 });
 
+test('den expirace automaticky vypořádá ITM call fyzickým dodáním 100 akcií', () => {
+  const game = createGame();
+  game.openTrade([{ type: 'call', side: 'long', strike: 100, premium: 2, quantity: 1, expiryDays: 1 }], 100);
+  const result = advanceDay(game, { ticker: 'LUMA', spot: 110 });
+  assert.equal(game.positions.length, 0);
+  assert.equal(game.shares, 100);
+  assert.equal(game.cash, 89800);
+  assert.equal(result.settlements[0].action, 'Uplatněna long call: nákup 100 akcií za strike 100');
+});
+
+test('OTM opce při expiraci propadne a zůstane zaznamenaná ve vypořádání', () => {
+  const game = createGame();
+  game.openTrade([{ type: 'put', side: 'long', strike: 90, premium: 2, quantity: 1, expiryDays: 1 }], 100);
+  const result = advanceDay(game, { ticker: 'LUMA', spot: 100 });
+  assert.equal(game.positions.length, 0);
+  assert.equal(game.shares, 0);
+  assert.match(result.settlements[0].action, /Propadla/);
+});
+
 test('posun času přecení pozici a uzavření vrátí rezervovanou hotovost', () => {
   const game = createGame();
   game.openTrade([{ type: 'call', side: 'long', strike: 100, premium: 5, quantity: 1 }], 100);

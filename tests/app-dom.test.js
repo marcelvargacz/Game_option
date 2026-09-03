@@ -9,7 +9,7 @@ class FakeElement {
 }
 
 function setupDom() {
-  const ids = ['ticker', 'spot', 'ticker-name', 'day', 'expiry', 'row-count', 'chain', 'legs', 'strategy-card', 'open-trade', 'trade-message', 'positions', 'equity', 'cash', 'reserved', 'presets', 'clear', 'next', 'up', 'down', 'auto-time'];
+  const ids = ['ticker', 'spot', 'ticker-name', 'day', 'expiry', 'row-count', 'chain', 'legs', 'strategy-card', 'open-trade', 'trade-message', 'positions', 'equity', 'cash', 'shares', 'reserved', 'stock-chart', 'presets', 'clear', 'next', 'up', 'down', 'auto-time'];
   const elements = Object.fromEntries(ids.map((id) => [id, new FakeElement(id)]));
   globalThis.document = { getElementById: (id) => elements[id] };
   globalThis.Option = class { constructor(text, value) { this.text = text; this.value = value; } };
@@ -19,6 +19,7 @@ function setupDom() {
 test('změna tickeru, expirace a počtu řádků vykreslí přehledný opční chain', async () => {
   const elements = setupDom();
   await import(`../src/app.js?test=${Date.now()}`);
+  assert.match(elements['stock-chart'].innerHTML, /Cena akcie LUMA/);
   assert.equal((elements.chain.innerHTML.match(/chain-row/g) ?? []).length, 9);
   assert.match(elements.chain.innerHTML, /class="bid"><button[^>]*data-leg="call-short"/);
   assert.match(elements.chain.innerHTML, /class="ask"><button[^>]*data-leg="call-long"/);

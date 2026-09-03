@@ -12,7 +12,7 @@ const dom = {
   ticker: byId('ticker'), spot: byId('spot'), tickerName: byId('ticker-name'), day: byId('day'),
   expiry: byId('expiry'), rowCount: byId('row-count'), chain: byId('chain'), legs: byId('legs'), strategyCard: byId('strategy-card'),
   openTrade: byId('open-trade'), tradeMessage: byId('trade-message'), positions: byId('positions'),
-  equity: byId('equity'), cash: byId('cash'), reserved: byId('reserved'), presets: byId('presets'),
+  equity: byId('equity'), cash: byId('cash'), shares: byId('shares'), reserved: byId('reserved'), stockChart: byId('stock-chart'), presets: byId('presets'),
 };
 
 let game = createGame();
@@ -22,6 +22,7 @@ let selectedExpiry = 30;
 let selectedRows = 9;
 let draft = [];
 let autoTimer = null;
+let priceHistory = [{ day: 0, spot }];
 
 Object.entries(assets).forEach(([symbol, asset]) => dom.ticker.add(new Option(`${symbol} · ${asset.name}`, symbol)));
 [14, 30, 60].forEach((days) => dom.expiry.add(new Option(`${days} dní`, days)));
@@ -88,7 +89,7 @@ function renderPayoffChart(legs, referenceSpot) {
 function renderDraft() {
   if (!draft.length) { dom.legs.className = 'legs empty'; dom.legs.textContent = 'Vyber nohu z chainu nebo použij předvolbu.'; dom.strategyCard.className = 'strategy-card empty-card'; dom.strategyCard.textContent = 'Sestav strategii — hned vysvětlím, co dělá.'; dom.openTrade.disabled = true; return; }
   dom.legs.className = 'legs';
-  dom.legs.innerHTML = draft.map((leg, index) => `<div class="leg"><span><b>${leg.side === 'long' ? 'KUPUJI' : 'PRODÁVÁM'}</b> ${leg.type.toUpperCase()} ${leg.strike} · ${leg.quantity} kontrakt (${leg.quantity * 100} akcií)</span><span>${leg.premium.toFixed(2)} <button data-remove="${index}" aria-label="Odebrat">×</button></span></div>`).join('');
+  dom.legs.innerHTML = draft.map((leg, index) => `<div class="leg"><span><b>${leg.side === 'long' ? 'KUPUJI' : 'PRODÁVÁM'}</b> ${leg.type.toUpperCase()} ${leg.strike} · ${leg.quantity} kontrakt (${leg.quantity * 100} akcií)<small>Expirace: den ${game.day + leg.expiryDays}</small></span><span>${leg.premium.toFixed(2)} <button data-remove="${index}" aria-label="Odebrat">×</button></span></div>`).join('');
   const summary = summarizeStrategy(draft, spot);
   dom.strategyCard.className = 'strategy-card';
   dom.strategyCard.innerHTML = `<h3>${summary.name}</h3><p>${summary.description}</p><div class="metrics"><div class="metric"><span>Max. zisk</span><strong>${money(summary.maxProfit)}</strong></div><div class="metric"><span>Max. riziko</span><strong>${money(summary.maxLoss)}</strong></div><div class="metric"><span>Break-even</span><strong>${summary.breakEven.toFixed(2)}</strong></div></div><div class="scenarios"><div class="scenario"><b>↑ Trh roste:</b> ${summary.upScenario}</div><div class="scenario"><b>↓ Trh klesá:</b> ${summary.downScenario}</div></div>${renderPayoffChart(draft, spot)}`;
@@ -97,24 +98,39 @@ function renderDraft() {
 function renderPortfolio() {
   dom.equity.textContent = money(gameEquity(game));
   dom.cash.textContent = `Volná hotovost: ${money(game.cash)}`;
+  dom.shares.textContent = `Akcie: ${game.shares} ks`;
   dom.reserved.textContent = `Zajištěno: ${money(game.reservedCash)}`;
-  if (!game.positions.length) { dom.positions.className = 'empty'; dom.positions.textContent = 'Zatím žádná pozice.'; return; }
+  const settlementLog = game.settlements.length ? `<div class="settlement-log"><b>Vypořádání expirací</b>${game.settlements.slice(-5).reverse().flatMap((record) => record.events.map((event) => `<small>Den ${record.settledDay}: ${event.action}</small>`)).join('')}</div>` : '';
+  if (!game.positions.length) { dom.positions.className = 'empty'; dom.positions.innerHTML = `Zatím žádná otevřená opční pozice.${settlementLog}`; return; }
   dom.positions.className = '';
   dom.positions.innerHTML = game.positions.map((position) => {
     const summary = summarizeStrategy(position.legs, spot);
     const pnl = position.openingCashFlow + position.mark;
     const legDetails = position.legs.map((leg) => `${leg.side === 'long' ? 'Koupená' : 'Prodaná'} ${leg.type.toUpperCase()} ${leg.strike} × ${leg.quantity} @ ${leg.premium.toFixed(2)}`).join('<br>');
-    return `<article class="position"><div class="position-top"><span>${summary.name}</span><span class="${pnl >= 0 ? 'pnl-up' : 'pnl-down'}">${pnl >= 0 ? '+' : ''}${money(pnl)}</span></div><small>Aktuální hodnota: ${money(position.mark)} · otevřeno den ${position.openedDay}</small><div class="position-detail"><div><b>Provedení:</b><br>${legDetails}</div><div class="position-metrics"><span>Čisté prémium <b>${money(position.openingCashFlow)}</b></span><span>Max. zisk <b>${money(summary.maxProfit)}</b></span><span>Max. ztráta <b>${money(summary.maxLoss)}</b></span></div>${renderPayoffChart(position.legs, position.openedSpot)}</div><button class="close" data-close="${position.id}">Uzavřít pozici</button></article>`;
-  }).join('');
+    return `<article class="position"><div class="position-top"><span>${summary.name}</span><span class="${pnl >= 0 ? 'pnl-up' : 'pnl-down'}">${pnl >= 0 ? '+' : ''}${money(pnl)}</span></div><small>Aktuální hodnota: ${money(position.mark)} · otevřeno den ${position.openedDay} · expirace: den ${position.openedDay + Math.min(...position.legs.map((leg) => leg.expiryDays))}</small><div class="position-detail"><div><b>Provedení:</b><br>${legDetails}</div><div class="position-metrics"><span>Čisté prémium <b>${money(position.openingCashFlow)}</b></span><span>Max. zisk <b>${money(summary.maxProfit)}</b></span><span>Max. ztráta <b>${money(summary.maxLoss)}</b></span></div>${renderPayoffChart(position.legs, position.openedSpot)}</div><button class="close" data-close="${position.id}">Uzavřít pozici</button></article>`;
+  }).join('') + settlementLog;
+}
+function renderStockChart() {
+  const history = priceHistory.slice(-30);
+  const width = 360, height = 105, pad = 18;
+  const values = history.map((point) => point.spot);
+  const min = Math.min(...values) * 0.98, max = Math.max(...values) * 1.02;
+  const range = Math.max(max - min, 1);
+  const x = (index) => pad + (index * (width - pad * 2)) / Math.max(history.length - 1, 1);
+  const y = (value) => height - pad - ((value - min) * (height - pad * 2)) / range;
+  const line = history.map((point, index) => `${x(index).toFixed(1)},${y(point.spot).toFixed(1)}`).join(' ');
+  dom.stockChart.innerHTML = `<div><b>Cena akcie ${ticker}</b><small>Simulovaná historie · den ${history[0].day}–${history.at(-1).day}</small></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Vývoj ceny akcie ${ticker}"><polyline points="${line}"/><circle cx="${x(history.length - 1)}" cy="${y(history.at(-1).spot)}" r="3"/><text x="${pad}" y="${height - 3}">${min.toFixed(1)}</text><text x="${width - pad - 32}" y="${height - 3}">${max.toFixed(1)}</text></svg>`;
 }
 function renderHeader() { dom.spot.textContent = spot.toFixed(2); dom.tickerName.textContent = `${ticker} · ${assets[ticker].name}`; dom.day.textContent = `Den ${game.day}`; }
-function render() { renderHeader(); renderChain(); renderDraft(); renderPortfolio(); }
+function render() { renderHeader(); renderStockChart(); renderChain(); renderDraft(); renderPortfolio(); }
 
 function moveMarket(direction) {
   const seed = (game.day * 17 + ticker.charCodeAt(0)) % 7;
   const naturalMove = [-0.018, 0.007, -0.006, 0.012, -0.009, 0.004, 0.01][seed];
   spot = Number((spot * (1 + naturalMove + direction * 0.035)).toFixed(2));
-  advanceDay(game, { ticker, spot });
+  const result = advanceDay(game, { ticker, spot });
+  priceHistory.push({ day: game.day, spot });
+  if (result.settlements.length) dom.tradeMessage.textContent = `Den ${game.day} — vypořádání expirace: ${result.settlements.map((event) => event.action).join(' · ')}`;
   render();
 }
 function toggleAutoTime() {
@@ -142,7 +158,7 @@ byId('down').addEventListener('click', () => moveMarket(-1));
 byId('auto-time').addEventListener('click', toggleAutoTime);
 dom.expiry.addEventListener('change', () => { selectedExpiry = Number(dom.expiry.value); draft = []; render(); });
 dom.rowCount.addEventListener('change', () => { selectedRows = Number(dom.rowCount.value); render(); });
-dom.ticker.addEventListener('change', () => { ticker = dom.ticker.value; spot = assets[ticker].spot; draft = []; render(); });
+dom.ticker.addEventListener('change', () => { ticker = dom.ticker.value; spot = assets[ticker].spot; priceHistory = [{ day: game.day, spot }]; draft = []; render(); });
 dom.openTrade.addEventListener('click', () => { const result = openTrade(game, draft, spot); dom.tradeMessage.textContent = result.ok ? `Pozice #${result.position.id} otevřena pouze v simulaci.` : result.error; if (result.ok) draft = []; render(); });
 dom.positions.addEventListener('click', (event) => { const button = event.target.closest('[data-close]'); if (!button) return; const result = closePosition(game, Number(button.dataset.close), spot); dom.tradeMessage.textContent = result.ok ? `Pozice uzavřena. Realizované P/L: ${money(result.pnl)}.` : result.error; render(); });
 

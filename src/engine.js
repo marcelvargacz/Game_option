@@ -34,10 +34,13 @@ export function createGame({ budget = 100000 } = {}) {
     cash: budget,
     startingCash: budget,
     reservedCash: 0,
+    shares: 0,
+    lastSpot: 0,
     day: 0,
     nextPositionId: 1,
     positions: [],
     closedPositions: [],
+    settlements: [],
   };
   game.openTrade = (legs, spot) => openTrade(game, legs, spot);
   return game;
@@ -157,10 +160,44 @@ function markPosition(position, spot, gameDay) {
   }, 0));
 }
 
+function settleExpiredLeg(game, leg, spot) {
+  const shares = leg.quantity * CONTRACT_MULTIPLIER;
+  const inTheMoney = leg.type === 'call' ? spot > leg.strike : spot < leg.strike;
+  if (!inTheMoney) return { leg, action: `${leg.type.toUpperCase()} ${leg.strike}: Propadla bezcenná (OTM)`, cashChange: 0, sharesChange: 0 };
+  const buyingShares = (leg.type === 'call' && leg.side === 'long') || (leg.type === 'put' && leg.side === 'short');
+  const sharesChange = buyingShares ? shares : -shares;
+  const cashChange = buyingShares ? -leg.strike * shares : leg.strike * shares;
+  const action = leg.type === 'call'
+    ? (leg.side === 'long' ? `Uplatněna long call: nákup ${shares} akcií za strike ${leg.strike}` : `Přiřazena short call: prodej ${shares} akcií za strike ${leg.strike}`)
+    : (leg.side === 'long' ? `Uplatněna long put: prodej ${shares} akcií za strike ${leg.strike}` : `Přiřazena short put: nákup ${shares} akcií za strike ${leg.strike}`);
+  return { leg, action, cashChange, sharesChange };
+}
+
 export function advanceDay(game, { ticker = 'LUMA', spot }) {
   game.day += 1;
-  game.positions.forEach((position) => { position.mark = markPosition(position, spot, game.day); });
-  return generateChain({ ticker, spot, day: game.day });
+  game.lastSpot = spot;
+  const settlements = [];
+  for (let index = game.positions.length - 1; index >= 0; index -= 1) {
+    const position = game.positions[index];
+    const elapsed = game.day - position.openedDay;
+    const expiredLegs = position.legs.filter((leg) => elapsed >= leg.expiryDays);
+    if (!expiredLegs.length) { position.mark = markPosition(position, spot, game.day); continue; }
+    const activeLegs = position.legs.filter((leg) => elapsed < leg.expiryDays);
+    const events = expiredLegs.map((leg) => settleExpiredLeg(game, leg, spot));
+    for (const event of events) {
+      game.cash = round(game.cash + event.cashChange);
+      game.shares += event.sharesChange;
+      game.reservedCash = round(game.reservedCash - reservedForLeg(event.leg));
+      settlements.push({ positionId: position.id, day: game.day, ...event });
+    }
+    position.legs = activeLegs;
+    position.reserve = activeLegs.reduce((sum, leg) => sum + reservedForLeg(leg), 0);
+    if (!activeLegs.length) {
+      game.positions.splice(index, 1);
+      game.settlements.push({ positionId: position.id, settledDay: game.day, events });
+    } else position.mark = markPosition(position, spot, game.day);
+  }
+  return { chain: generateChain({ ticker, spot, day: game.day }), settlements };
 }
 
 export function closePosition(game, id, spot) {
@@ -176,5 +213,5 @@ export function closePosition(game, id, spot) {
 }
 
 export function gameEquity(game) {
-  return round(game.cash + game.reservedCash + game.positions.reduce((sum, p) => sum + p.mark, 0));
+  return round(game.cash + game.reservedCash + game.shares * game.lastSpot + game.positions.reduce((sum, p) => sum + p.mark, 0));
 }

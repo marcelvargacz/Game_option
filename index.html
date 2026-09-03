@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div><p class="eyebrow">TRÉNINK · BEZ SKUTEČNÝCH PENĚZ</p><h1>Opční laboratoř</h1></div>
-    <div class="wallet"><span>Virtuální účet</span><strong id="equity">100 000 Kč</strong><small id="cash">Volná hotovost: 100 000 Kč</small></div>
+    <div class="wallet"><span>Virtuální účet</span><strong id="equity">100 000 Kč</strong><small id="cash">Volná hotovost: 100 000 Kč</small><small id="shares">Akcie: 0 ks</small></div>
   </header>
   <main>
     <section class="market-strip" aria-label="Ovládání simulace">
@@ -17,6 +17,7 @@
       <div class="spot"><span>Podklad</span><strong id="spot">—</strong><small id="ticker-name">—</small></div>
       <div class="day"><span>Simulovaný den</span><strong id="day">Den 0</strong></div>
       <div class="time-controls"><button id="down" class="quiet">← Cena dolů</button><button id="next">Posunout o den →</button><button id="up" class="quiet">Cena nahoru →</button><button id="auto-time" class="auto-button" aria-pressed="false">▶ Automat: vypnutý</button></div>
+      <div id="stock-chart" class="stock-chart" aria-label="Graf ceny podkladu"></div>
     </section>
 
     <section class="learn-note"><strong>Jak to funguje:</strong> každý kontrakt v této hře kontroluje <b>100 akcií</b>. Ceny, tickery i pohyb trhu jsou fiktivní a slouží výhradně k učení.</section>
